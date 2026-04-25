@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.angular/
+.env
+*.log
+apps/api/uploads/
+__pycache__/
+*.pyc
+.venv/

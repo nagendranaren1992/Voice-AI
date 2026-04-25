@@ -1,0 +1,25 @@
+CREATE TABLE "Patient" (
+  "id" SERIAL NOT NULL,
+  "uhid" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "Patient_pkey" PRIMARY KEY ("id")
+);
+
+CREATE TABLE "Visit" (
+  "id" SERIAL NOT NULL,
+  "transcript" TEXT,
+  "audioUrl" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'pending',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "patientId" INTEGER NOT NULL,
+  CONSTRAINT "Visit_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "Patient_uhid_key" ON "Patient"("uhid");
+
+ALTER TABLE "Visit"
+ADD CONSTRAINT "Visit_patientId_fkey" FOREIGN KEY ("patientId")
+REFERENCES "Patient"("id") ON DELETE CASCADE ON UPDATE CASCADE;

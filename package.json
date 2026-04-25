@@ -1,0 +1,27 @@
+{
+  "name": "medical-stt-platform",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run start"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3",
+    "tsx": "latest",
+    "typescript": "5.8.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

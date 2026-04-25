@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: medical_stt_postgres
+    environment:
+      POSTGRES_DB: medical_stt
+      POSTGRES_USER: medical_user
+      POSTGRES_PASSWORD: medical_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  stt:
+    build:
+      context: .
+      dockerfile: services/stt/Dockerfile
+    container_name: medical_stt_service
+    environment:
+      WHISPER_MODEL: large-v3
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE_TYPE: int8
+      WHISPER_LANGUAGE: en
+      MAX_UPLOAD_MB: 40
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: medical_stt_api
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://medical_user:medical_password@postgres:5432/medical_stt?schema=public
+      STT_SERVICE_URL: http://stt:8000
+      CORS_ORIGIN: http://localhost:4200
+      AUDIO_UPLOAD_DIR: /app/uploads
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - stt
+    volumes:
+      - api_uploads:/app/uploads
+
+volumes:
+  postgres_data:
+  api_uploads:
