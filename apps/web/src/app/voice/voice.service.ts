@@ -1,6 +1,6 @@
-import { Injectable } from "@angular/core";
+import { Injectable, NgZone } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
-import { Observable, interval, switchMap, takeWhile } from "rxjs";
+import { Observable, firstValueFrom } from "rxjs";
 
 interface UploadAcceptedResponse {
   visitId: number;
@@ -21,7 +21,10 @@ export class VoiceService {
   private chunks: Blob[] = [];
   private stream?: MediaStream;
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly ngZone: NgZone
+  ) {}
 
   async startRecording(): Promise<void> {
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -53,14 +56,18 @@ export class VoiceService {
         this.http
           .post<UploadAcceptedResponse>("/api/upload-voice", formData)
           .subscribe({
-            next: (response) => {
-              this.pollTranscript(response.visitId).subscribe({
-                next: (finalResponse) => observer.next(finalResponse),
-                error: (error) => observer.error(error),
-                complete: () => observer.complete()
-              });
+            next: async (response) => {
+              try {
+                const finalResponse = await this.pollTranscriptUntilDone(response.visitId);
+                this.ngZone.run(() => {
+                  observer.next(finalResponse);
+                  observer.complete();
+                });
+              } catch (error) {
+                this.ngZone.run(() => observer.error(error));
+              }
             },
-            error: (error) => observer.error(error),
+            error: (error) => this.ngZone.run(() => observer.error(error)),
             complete: () => undefined
           });
 
@@ -71,32 +78,29 @@ export class VoiceService {
     });
   }
 
-  private pollTranscript(visitId: number): Observable<{ visitId: number; transcript: string }> {
-    return new Observable((observer) => {
-      interval(1200)
-        .pipe(
-          switchMap(() =>
-            this.http.get<VisitStatusResponse>(`/api/patients/visits/${visitId}`)
-          ),
-          takeWhile((response) => response.visit.status === "processing", true)
-        )
-        .subscribe({
-          next: (response) => {
-            if (response.visit.status === "failed") {
-              observer.error(new Error("Transcription failed."));
-              return;
-            }
+  private async pollTranscriptUntilDone(
+    visitId: number
+  ): Promise<{ visitId: number; transcript: string }> {
+    const maxAttempts = 180;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const response = await firstValueFrom(
+        this.http.get<VisitStatusResponse>(`/api/patients/visits/${visitId}`)
+      );
 
-            if (response.visit.status === "completed") {
-              observer.next({
-                visitId: response.visit.id,
-                transcript: response.visit.transcript || ""
-              });
-            }
-          },
-          error: (error) => observer.error(error),
-          complete: () => observer.complete()
-        });
-    });
+      if (response.visit.status === "completed") {
+        return {
+          visitId: response.visit.id,
+          transcript: response.visit.transcript || ""
+        };
+      }
+
+      if (response.visit.status === "failed") {
+        throw new Error("Transcription failed.");
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    }
+
+    throw new Error("Transcription polling timed out.");
   }
 }

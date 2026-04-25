@@ -19,6 +19,11 @@ patientRouter.post("/visits", async (req, res) => {
     return res.status(400).json({ error: "patientId is required." });
   }
 
+  const patient = await prisma.patient.findUnique({ where: { id: patientId } });
+  if (!patient) {
+    return res.status(404).json({ error: "Patient not found." });
+  }
+
   const visit = await prisma.visit.create({
     data: {
       patientId,
