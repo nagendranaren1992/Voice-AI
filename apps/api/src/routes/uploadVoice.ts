@@ -50,6 +50,7 @@ async function processTranscription(
 
 uploadVoiceRouter.post("/", upload.single("file"), async (req, res) => {
   try {
+    const mode = String(req.body.mode || req.query.mode || "sync").toLowerCase();
     const visitId = Number(req.body.visitId);
     if (!visitId || Number.isNaN(visitId)) {
       return res.status(400).json({ error: "visitId is required and must be numeric." });
@@ -77,6 +78,39 @@ uploadVoiceRouter.post("/", upload.single("file"), async (req, res) => {
         status: "processing"
       }
     });
+
+    if (mode === "sync") {
+      try {
+        const transcript = await Promise.race<string>([
+          transcribeAudio(
+            req.file.originalname || safeName,
+            req.file.mimetype,
+            req.file.buffer
+          ),
+          new Promise<string>((_, reject) => {
+            setTimeout(() => reject(new Error("Transcription timed out.")), transcriptionJobTimeoutMs);
+          })
+        ]);
+
+        const updatedVisit = await prisma.visit.update({
+          where: { id: visitId },
+          data: { transcript, status: "completed" }
+        });
+
+        return res.json({
+          visitId: updatedVisit.id,
+          status: "completed",
+          transcript: updatedVisit.transcript || ""
+        });
+      } catch (error) {
+        logger.error({ error, visitId }, "sync transcription failed");
+        await prisma.visit.update({
+          where: { id: visitId },
+          data: { status: "failed" }
+        });
+        return res.status(500).json({ error: "Transcription failed." });
+      }
+    }
 
     void processTranscription(
       visitId,

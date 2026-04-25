@@ -4,7 +4,12 @@ export const appRoutes: Routes = [
   {
     path: "",
     pathMatch: "full",
-    redirectTo: "voice-test"
+    redirectTo: "dashboard"
+  },
+  {
+    path: "dashboard",
+    loadComponent: () =>
+      import("./dashboard/dashboard.component").then((m) => m.DashboardComponent)
   },
   {
     path: "voice-test",

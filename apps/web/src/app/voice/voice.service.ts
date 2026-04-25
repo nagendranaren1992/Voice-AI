@@ -7,6 +7,12 @@ interface UploadAcceptedResponse {
   status: "processing";
 }
 
+interface UploadSyncResponse {
+  visitId: number;
+  status: "completed";
+  transcript: string;
+}
+
 interface VisitStatusResponse {
   visit: {
     id: number;
@@ -40,7 +46,10 @@ export class VoiceService {
     this.mediaRecorder.start();
   }
 
-  stopRecording(visitId: number): Observable<{ visitId: number; transcript: string }> {
+  stopRecording(
+    visitId: number,
+    mode: "sync" | "async" = "sync"
+  ): Observable<{ visitId: number; transcript: string }> {
     return new Observable((observer) => {
       if (!this.mediaRecorder) {
         observer.error(new Error("Recorder not initialized."));
@@ -51,7 +60,27 @@ export class VoiceService {
         const blob = new Blob(this.chunks, { type: "audio/webm" });
         const formData = new FormData();
         formData.append("visitId", String(visitId));
+        formData.append("mode", mode);
         formData.append("file", blob, "voice-note.webm");
+
+        if (mode === "sync") {
+          this.http
+            .post<UploadSyncResponse>("/api/upload-voice", formData)
+            .subscribe({
+              next: (response) =>
+                this.ngZone.run(() => {
+                  observer.next({
+                    visitId: response.visitId,
+                    transcript: response.transcript || ""
+                  });
+                  observer.complete();
+                }),
+              error: (error) => this.ngZone.run(() => observer.error(error))
+            });
+
+          this.stream?.getTracks().forEach((track) => track.stop());
+          return;
+        }
 
         this.http
           .post<UploadAcceptedResponse>("/api/upload-voice", formData)
